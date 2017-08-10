@@ -14,112 +14,6 @@ from scipy.special import cbrt
 from scipy.signal import argrelextrema
 import h5py
 
-def show_img_and_mask(input_file):
-    im=spimage.sp_image_read(input_file,0)
-    if len(shape(im.image))==2:
-        fig=pylab.figure('image and mask',figsize=(20,10))
-        fig.clear()
-        fig.add_subplot(1,2,1)
-        pylab.imshow(numpy.absolute(im.image), norm=LogNorm())
-        fig.add_subplot(1,2,2)
-        pylab.imshow(numpy.absolute(im.mask))
-    if len(shape(im.image))==3:
-        fig=pylab.figure('image and mask',figsize=(10,10))
-        fig.clear()
-        fig.add_subplot(2,2,1)
-        pylab.imshow(numpy.absolute(im.image[0,:,:]), norm=LogNorm())
-        fig.add_subplot(2,2,2)
-        pylab.imshow(numpy.absolute(im.mask[0,:,:]))
-        fig.add_subplot(2,2,3)
-        pylab.imshow(numpy.absolute(im.image[shape(im.image)[0]/2,:,:]), norm=LogNorm())
-        fig.add_subplot(2,2,4)
-        pylab.imshow(numpy.absolute(im.mask[shape(im.image)[0]/2,:,:]))
-
-def show_img_times_mask(input_file,s='x'):
-    im=spimage.sp_image_read(input_file,0)
-    if s=='x':
-        sl=(shape(im.image)[0]/2,slice(None),slice(None))
-    if s=='y':
-        sl=(slice(None),shape(im.image)[0]/2,slice(None))
-    if s=='z':
-        sl=(slice(None),slice(None),shape(im.image)[0]/2)
-    if len(shape(im.image))==2:
-        fig=pylab.figure('image and mask',figsize=(20,10))
-        fig.clear()
-        pylab.imshow(numpy.absolute(im.image)*im.mask, norm=LogNorm())
-    if len(shape(im.image))==3:
-        fig=pylab.figure('image and mask',figsize=(10,10))
-        fig.clear()
-        fig.add_subplot(2,1,1)
-        pylab.imshow(numpy.absolute(im.image[0,:,:])*im.mask[0,:,:], norm=LogNorm())
-        fig.add_subplot(2,1,2)
-        pylab.imshow(numpy.absolute(im.image[sl])*im.mask[sl], norm=LogNorm())
-
-    
-        
-def show_slice(input_file):
-    im=spimage.sp_image_read(input_file,0)
-    fig=pylab.figure(1, figsize=(10,10))
-    fig.clear()
-    pylab.imshow(numpy.absolute(im.image)[32,:,:])
-
-def show_img_and_phase(input_file, shift=True):
-    im=spimage.sp_image_read(input_file,0)
-    if shift:
-        im=spimage.sp_image_shift(im)
-    s=shape(im.image)[0]/2
-    fig=pylab.figure(1,figsize=(20,10))
-    fig.clear()
-    fig.add_subplot(1,2,1)
-    pylab.imshow(numpy.absolute(im.image[s,:,:]))
-    fig.add_subplot(1,2,2)
-    pylab.imshow(numpy.angle(im.image[s,:,:]),cmap='PiYG')
-    
-def add_mask(path, output_file):
-    imgs=[path+i for i in os.listdir(path) if i.endswith('.h5')]
-    for img_file in imgs:
-        img=spimage.sp_image_read(img_file,0)
-        try:
-            msk_array=msk_array+img.mask
-        except NameError:
-            msk_array=img.mask
-    msk_array[msk_array<msk_array.max()]=0
-    msk_array[msk_array!=0]=1
-    new=spimage.sp_image_alloc(numpy.shape(img.image)[0], numpy.shape(img.image)[1],1)
-    new.mask[:,:]=msk_array
-    new.image[:,:]=msk_array
-    spimage.sp_image_write(new,output_file,0)
-
-def add_mask_center(img_path, pref_mask_img, output_file, FINAL_SIZE=276):
-    imgs=[img_path+i for i in os.listdir(img_path) if i.endswith('.h5')]
-    mask_img=spimage.sp_image_read(pref_mask_img,0)
-    orig_center=mask_img.detector.image_center
-    for img_file in imgs:
-        img=spimage.sp_image_read(img_file,0)
-        center=img.detector.image_center
-        cropped_mask = image_manipulation.crop_and_pad(mask_img.mask, (orig_center[1], center[1], orig_center[0]+center[0]), FINAL_SIZE)
-        try:
-            msk_array=msk_array+cropped_mask
-        except NameError:
-            msk_array=cropped_mask
-    msk_array[msk_array<msk_array.max()]=0
-    msk_array[msk_array!=0]=1
-    new=spimage.sp_image_alloc(FINAL_SIZE,FINAL_SIZE,1)
-    new.mask[:,:]=msk_array
-    new.image[:,:]=msk_array
-    spimage.sp_image_write(new,output_file,0)
-
-def prep_emc_for_phasing(input_file, output_file):
-    img=spimage.sp_image_read(input_file,0)
-    #set all negative values to 0:
-    img.image[:,:,:]=img.image.clip(0)
-    #set corners of mask to 1:
-    z_array = arange(img.image.shape[0]) - img.image.shape[0]/2. + 0.5
-    y_array = arange(img.image.shape[1]) - img.image.shape[1]/2. + 0.5
-    x_array = arange(img.image.shape[2]) - img.image.shape[2]/2. + 0.5
-    r_array = sqrt(x_array[:]**2 + y_array[:, newaxis]**2 + z_array[:, newaxis, newaxis]**2)
-    img.mask[r_array>img.image.shape[0]/2. + 0.5]=1
-    spimage.sp_image_write(img,output_file,0)
 
 def slice_3D(fn, output_dir=''):
     #Takes 3 slices through the center along x,y and z from a 3D image and saves it as three new 2D images.
@@ -145,20 +39,6 @@ def slice_3D(fn, output_dir=''):
     img_2D.mask[:,:]=img_3D.mask[:,:,s]
     spimage.sp_image_write(img_2D, output_dir+fn.split('.')[0]+'_z_slice.h5',0)
 
-
-def plot_img_with_circle(image_file_name, r=20.):
-    #Shows an image with a circle of given radius around the image center
-    import matplotlib.pyplot as plt
-    img=spimage.sp_image_read(image_file_name,0)
-    print shape(img.image)
-    circle1=plt.Circle(img.detector.image_center,r,color='r', fill=False)
-    fig = plt.gcf()
-    negatives=real(img.image)
-    print shape(negatives)
-    negatives[real(img.image)>0.]=0.
-    pylab.imshow(absolute(img.image))
-    #pylab.imshow(absolute(negatives), norm=LogNorm())
-    fig.gca().add_artist(circle1)
 
 def put_neg_to_zero(image_file_name,output_file_name):
     img=spimage.sp_image_read(image_file_name,0)
@@ -197,25 +77,6 @@ def add_new_mask(img_file_name, new_mask_file_name, output_file_name, imgtimesma
         new_img.image[:,:,:]=img.image*new_mask.mask
         spimage.sp_image_write(new_img, 'imgtimesmask.h5',0)
 
-def mask_center(img_file_name, radius, output_file_name, save_file=True):
-    """Create a new mask around the center with given radius"""
-    img=spimage.sp_image_read(img_file_name,0)
-    z_array = arange(img.image.shape[0]) - img.image.shape[0]/2. + 0.5
-    y_array = arange(img.image.shape[1]) - img.image.shape[1]/2. + 0.5
-    x_array = arange(img.image.shape[2]) - img.image.shape[2]/2. + 0.5
-    r_array = sqrt(x_array[:]**2 + y_array[:, newaxis]**2 + z_array[:, newaxis, newaxis]**2)
-    img.mask[r_array<radius]=0
-    img.mask[r_array>radius]=1
-    new_mask=spimage.sp_image_alloc(*shape(img.mask))
-    new_mask.mask[:,:,:]=img.mask
-    new_mask.image[:,:,:]=img.image
-    new_mask.shifted=img.shifted
-    new_mask.scaled=img.scaled
-    new_mask.detector=img.detector
-    if save_file:
-        spimage.sp_image_write(new_mask, output_file_name, 0)
-    else:
-        return(new_mask)
 
 def mask_center_and_negatives(img_file_name, radius, output_file_name, save_file=True):
     """Creates a new mask around the center with given radius as well as masking out regions with negative values in the image."""
@@ -227,190 +88,10 @@ def mask_center_and_negatives(img_file_name, radius, output_file_name, save_file
     else:
         return(msk)
 
-def plot_errors(dir='.'):
-    """ Plots the errors saved in efourier.data and ereal.data files in given directory """
-    efourier=numpy.genfromtxt(dir+'/efourier.data')
-    ereal=numpy.genfromtxt(dir+'/ereal.data')
-    fig=pylab.figure('Phasing errors')
-    pylab.plot(range(len(efourier)), efourier, lw=2., c='r', label='Fourier error')
-    pylab.plot(range(len(ereal)), ereal, lw=2., c='k', label='Real error')
-    pylab.legend()
-    pylab.show()
-
-def extract_final_errors(path=os.getcwd(), pickle_output=True):
-    print path
-    errors=[]
-    rundirs=[d for d in os.listdir(path) if d.startswith('run_')]
-    rundirs.sort()
-    for d in rundirs:
-        try:
-            errors.append([numpy.genfromtxt(d+'/efourier.data')[-1], numpy.genfromtxt(d+'/ereal.data')[-1], d])
-        except:
-            print d + ' is not a directory or does not contain error files'
-    Structured_errors=numpy.core.records.fromarrays(array(errors).transpose(),names='fourier_error, real_error, run', formats = 'f8, f8, S8')
-    if pickle_output:
-        pickle.dump(Structured_errors, open(path+'/final_errors.p', 'wb'))
-    return(Structured_errors)
-    
-def plot_final_error_hist(b=10):
-    try:
-        errors=pickle.load(open('final_errors.p', 'wb'))
-    except:
-        errors=extract_final_errors()
-    fig=pylab.figure()
-    fig.clear()
-    fig.add_subplot(2,1,1)
-    pylab.hist(errors['fourier_error'], bins=b, label='Fourier error')
-    pylab.legend()
-    fig.add_subplot(2,1,2)
-    pylab.hist(errors['real_error'], bins=b, label='Real error')
-    pylab.legend()
-    
-def plot_final_errors():
-    try:
-        errors=pickle.load(open('final_errors.p', 'rb'))
-    except:
-        errors=extract_final_errors()
-    fig=pylab.figure('Errors')
-    #fig.clear()
-    fig.add_subplot(2,1,1)
-    errors.sort(order='fourier_error')
-    pylab.plot(range(len(errors['fourier_error'])), errors['fourier_error'], label='Fourier error')
-    pylab.legend()
-    fig.add_subplot(2,1,2)
-    errors.sort(order='real_error')
-    pylab.plot(range(len(errors['real_error'])), errors['real_error'], label='Real error')
-    pylab.legend()
-
-def select_by_error_cutoff(cutoff):
-    try:
-        errors=pickle.load(open(path+'/final_errors.p', 'rb'))
-    except:
-        errors=extract_final_errors()
-    return errors[where(errors['real_error']<cutoff)]
-
-def calc_prtf_subset(cutoff):
-    errors=select_by_error_cutoff(cutoff)
-    l=[f+'/output_net/model_4009.h5' for f in errors['run']]
-    output_dir='prtf_output_{c}_{t}'.format(c=str(cutoff),t=time.strftime('%Y%m%d'))
-    os.mkdir(output_dir)
-    command='prtf {output_dir}/PRTF {list_of_files}'.format(output_dir=output_dir, list_of_files=' '.join(l))
-    print command
-    os.system(command)
-
-def calc_prtf_all():
-    try:
-        errors=pickle.load(open('final_errors.p', 'rb'))
-    except:
-        errors=extract_final_errors()
-    l=[f+'/output_net/model_4009.h5' for f in errors['run']]
-    output_dir='prtf_output_all_{t}'.format(t=time.strftime('%Y%m%d'))
-    os.mkdir(output_dir)
-    command='prtf {output_dir}/PRTF {list_of_files}'.format(output_dir=output_dir, list_of_files=' '.join(l))
-    print command
-    os.system(command)
-
-def plot_prtf(d):
-    p=genfromtxt(os.path.join(d,'PRTF'))
-    pylab.figure('PRTF')
-    pylab.plot(p[:,0], p[:,1])
-    pylab.axhline(1/e)      
-
 def plot_from_file(f):
     d=genfromtxt(f)
     fig=pylab.figure()
     pylab.plot(len(d),d, lw=2.)
-
-def calc_average_img(cutoff):
-    run_folders=select_by_error_cutoff(cutoff)['run']
-    for r in run_folders:
-        img=spimage.sp_image_read(r+'/output_net/model_4009.h5',0)
-        try:
-            added_imgs=added_imgs+img.image
-        except NameError:
-            added_imgs=img.image
-    avg_img=added_imgs/float(len(run_folders))
-    new=spimage.sp_image_alloc(*shape(img.image))
-    new.image[:,:,:]=avg_img
-    spimage.sp_image_write(new,'average_final_model_{c}_{t}.h5'.format(c=cutoff,t=time.strftime('%Y%m%d')),0)
-
-def calc_average_img_2(files, output_file_name):
-    for f in files:
-        img=spimage.sp_image_read(f,0)
-        try:
-            added_imgs=added_imgs+img.image
-        except NameError:
-            added_imgs=img.image
-    avg_img=added_imgs/float(len(files))
-    new=spimage.sp_image_alloc(*shape(img.image))
-    new.image[:,:,:]=avg_img
-    spimage.sp_image_write(new,output_file_name,0)
-
-# for i,r in enumerate(errors['run']):
-#     img=spimage.sp_image_read(r+'/output/support_4009.h5',0)
-#     if i%10==0:
-#         print i, r
-#         if i>0:
-#             new=spimage.sp_image_alloc(*shape(img.image))
-#             new.image[:,:,:]=added_img
-#             spimage.sp_image_write(new,'cumulative_support_{index}.h5'.format(index=i/10),0)
-#         added_img=img.image
-#     else:
-#         added_img=added_img+img.image
-
-def create_local_output_symlink(local_folder):
-    dirs=[d for d in os.listdir(local_folder) if d.startswith('run_')]
-    for d in dirs:
-        try:
-            scratch_folder='/net/davinci'+os.readlink(d+'/output')
-        except OSError:
-            print d+ ' has no symlinked output folder'
-        try:
-            os.symlink(scratch_folder, os.path.join(d, 'output_net'))
-        except OSError:
-            os.unlink(os.path.join(d, 'output_net'))
-            os.symlink(scratch_folder, os.path.join(d, 'output_net'))
-
-#def convert_condor_cxi_to_spimage(input_cxi_file_name, mask=None, output_file):
-#    input_cxi=h5py.File(input_cxi_file_name, 'r')
-#    data=input_cxi['data']
-#    spimage.sp_image_alloc()
-#    input_cxi.close()
-
-def radial_average(data, center):
-    y,x = numpy.indices((data.shape)) # first determine radii of all pixels
-    r = numpy.sqrt((x-center[0])**2+(y-center[1])**2)
-    ind = numpy.argsort(r.flat) # get sorted indices
-    sr = r.flat[ind] # sorted radii
-    sim = data.flat[ind] # image values sorted by radii
-    ri = sr.astype(numpy.int32) # integer part of radii (bin size = 1)
-    # determining distance between changes
-    deltar = ri[1:] - ri[:-1] # assume all radii represented
-    rind = numpy.where(deltar)[0] # location of changed radius
-    nr = rind[1:] - rind[:-1] # number in radius bin
-    csim = numpy.cumsum(sim, dtype=numpy.float64) # cumulative sum to figure out sums for each radii bin
-    tbin = csim[rind[1:]] - csim[rind[:-1]] # sum for image values in radius bins
-    radialprofile = tbin/nr # the answer
-    return radialprofile
-
-def plot_radial_average(image_name, return_r=True):
-    if type(image_name)==str:
-        img=spimage.sp_image_read(image_name,0).image
-    elif type(image_name)==numpy.array:
-        img=image_name
-    else:
-        img=image_name.image
-    dim=shape(img)[0]
-    if len(shape(img))==3:
-        img_slice=img[dim/2,:,:]
-    else:
-        img_slice=img
-
-    radavg=radial_average(img_slice, (dim/2,dim/2))
-    pylab.figure('radavgs')
-    pylab.plot(log10(radavg))
-    if return_r:
-        return(radavg)
 
 def michelson_contrast(radial_average_profile, norm=True,plot=True):
     max_positions=argrelextrema(radial_average_profile, numpy.greater)
@@ -450,9 +131,7 @@ def percentage_contrast(radial_average_profile, plot=True):
         pylab.plot(radial_average_profile)
         pylab.plot(max_positions,max_vals, 'ro')
         pylab.plot(min_positions,min_vals, 'ko')
-    return (max_vals-min_vals)/(max_vals)
-
-        
+    return (max_vals-min_vals)/(max_vals)   
     
 def sector_mask(shape,centre,radius,angle_range):
     """
@@ -703,36 +382,9 @@ def real_space_residual(Rho_ref, Rho_rec, support=None, normalize=True):
         R1/=R1.max()
         R2/=R2.max()
     return sum(abs(R2-R1))/sum(abs(R2+R1))
-
-
-
-
-'''
-def cxi_to_spimage(cxi_file, spimage_file_name, key_path='entry_1/data_1/data', mask=None):
-    with h5py.File(cxi_file) as cxi:
-        data=cxi[key_path][:]
-    s=shape(data)
-    print s
-    if len(s)>3:
-        sm=max(s)
-        im=spimage.sp_image_alloc(sm,sm,sm)
-        data=[0,:,:,:]
-    if len(s)==3:
-        im=spimage.sp_image_alloc(s)
-    elif len(s)==2:
-        im=spimage.sp_image_alloc(s+(1,))
-    im.image[:]=data
-    if mask!=None:
-        im.mask[:]=mask
-    spimage.sp_image_write(im, spimage_file_name,0)
-
-'''
-
-
-
     
 
-#-----------STOLEN FROM REDFLAMINGO (sizing_convexhull_ball_refine.py)
+#-----------FROM REDFLAMINGO (sizing_convexhull_ball_refine.py)
 def high_pass_filter(image_size, sigma):
     #image_size = 1024
     x_array = arange(image_size) - image_size/2

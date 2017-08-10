@@ -15,10 +15,6 @@ import math
 import Ida_python_tools.stuff as stuff
 import h5py
 from IPython import embed
-#pylab.rc('axes', linewidth=1.5)
-#pylab.rc('xtick', labelsize = 12.0)
-#pylab.rc('ytick', labelsize = 12.0)
-
 
 def prep_emc_output_for_phasing(input_file, output_file):
     "Sets all negative values in image to 0 and create a rectangular mask"
@@ -52,18 +48,7 @@ def mask_center(img_file_name, radius, output_file_name=None, save_file=True):
         spimage.sp_image_write(new_mask, output_file_name, 0)
     else:
         return(new_mask)
-
-
-def slice_3D(fn, output_fn):
-    #Takes 3 slices through the center along x,y and z from a 3D image and saves it as three new 2D images.
-    img_3D=spimage.sp_image_read(fn, 0)
-    dim=shape(img_3D.image)[0]
-    img_2D=spimage.sp_image_alloc(dim,dim,1)
-    img_2D.shifted=img_3D.shifted
-    img_2D.scaled=img_3D.scaled
-    if img_3D.shifted==0:
-        s=dim/2
-        
+    
 def plot_error_per_iteration(dir='.', with_legend=True):
     """ Plots the errors saved in efourier.data and ereal.data files in given directory """
     efourier=numpy.genfromtxt(dir+'/efourier.data')
@@ -120,9 +105,13 @@ def plot_final_errors(path, sort=True):
     pylab.plot(range(len(errors['real_error'])), errors['real_error'])
     pylab.savefig(os.path.join(path, 'error_plot.png'))
 
-def select_by_error_cutoff(path, cutoff):
-    errors=extract_final_errors(path)
+def select_by_error_cutoff(cutoff):
+    try:
+        errors=pickle.load(open(path+'/final_errors.p', 'rb'))
+    except:
+        errors=extract_final_errors()
     return errors[where(errors['real_error']<cutoff)]
+
 
 def return_last_iteration_integer(path):
     img_nr=[int(i.split('_')[-1][:-3]) for i in os.listdir(path) if i.endswith('.h5')]
@@ -172,65 +161,18 @@ def pix_to_res(x, wl, dd, ps):
     #resolution element corresponds to half period resolution
     return wl / 4. / numpy.sin( numpy.arctan2( x * ps, dd ) / 2. )
 
-
-
 def pix_to_q_2(x,wl, dd, ps):
     return (2*ps)/(dd*wl)
 
-
-def plot_prtf_broken(di=None,legend=True, downsampling=8., plot_beyond_edge=False):
-    '''When input is none, plots all prtf_output* directories availiabe, other input may be one directory or a list of directories'''
-    if di==None:
-        dir_list=[i for i in os.listdir('.') if i.startswith('prtf_output')]
-    elif type(di)==str:
-        dir_list=[di]
-    elif type(di)==list:
-        dir_list=di
-    else:
-        'Nothing to plot :\'('
-        return None
-    for d in dir_list:
-        p=genfromtxt(os.path.join(d,'PRTF'))
-        img=spimage.sp_image_read(os.path.join(d,'PRTF-avg_image.h5'),0)
-        s=shape(img.image)
-        edge_num_of_pix=(sqrt(sum((array(s)*downsampling)**2))/2.)
-        print edge_num_of_pix
-        x=p[:,0].copy()
-        x/=x.max()
-        print x
-        x*=edge_num_of_pix
-        print x
-        q=pix_to_q(x,1.035e-9, 0.7317, 0.000075)
-        fig=pylab.figure('PRTF')
-        #q=pix_to_q(1.035e-9, 0.7317, 0.0006)
-        ax1=fig.add_subplot(111)
-        ax2=ax1.twiny()
-        if plot_beyond_edge:
-            ax1.plot(q, p[:,1], '.-',lw=1.5, label=d)
-        else:
-            max_q=pix_to_q(s[0],1.035e-9, 0.7317, 0.000075*downsampling)
-            new_q=q[q<=max_q]
-            ax1.plot(new_q, p[:len(new_q),1], '.-',lw=1.5, label=d)
-            #ax1.set_xlim(0,max_q)
-            spimage.sp_image_free(img)
-        ax1Ticks = ax1.get_xticks()   
-        ax2Ticks = ax1Ticks
-        
-        def tick_function(X):
-            V = 1e09/X
-            return ["%.3f" % z for z in V]
-        
-        ax2.set_xticks(ax2Ticks)
-        ax2.set_xbound(ax1.get_xbound())
-        ax2.set_xticklabels(tick_function(ax2Ticks))
-    if legend:
-        ax1.legend()
-    ax1.set_xlabel(r'$|q|[nm^{-1}]$', fontsize=18)
-    ax2.set_xlabel(r'$resolution (nm)$', fontsize=18)
-    ax1.set_ylabel(r'$PRTF$', fontsize=18)
-    ax1.axhline(1/e, c='k')
-    return q
-
+def prtf_radial_average(prtf_dir, downsampling):
+    prtf=spimage.sp_image_read(os.path.join(prtf_dir,'PRTF-prtf.h5'),0)
+    s=shape(prtf.image)
+    r,prtf_radavg=spimage.radialMeanImage(prtf.image, cx=0., cy=0., cz=0., output_r=True)
+    q=pix_to_q(r,1.035e-9, 0.7317, 0.000075*downsampling)
+    q/=1e09 #reciprocal nanometres
+    q_edge=pix_to_q(s[0]/2,1.035e-9, 0.7317, 0.000075*downsampling)/1e09
+    q_short=q[q<=q_edge] #Truncate prtf at detector edge
+    return prtf_radavg, q_short
 
 def plot_prtf(di=None,legend=True, custom_legend=None, downsampling=8., plot_beyond_edge=False):
     '''When input is none, plots all prtf_output* directories availiabe, other input may be one directory or a list of directories'''
@@ -245,11 +187,7 @@ def plot_prtf(di=None,legend=True, custom_legend=None, downsampling=8., plot_bey
         'Nothing to plot :\'('
         return None
     for i,d in enumerate(dir_list):
-        prtf=spimage.sp_image_read(os.path.join(d,'PRTF-prtf.h5'),0)
-        s=shape(prtf.image)
-        r,prtf_radavg=spimage.radialMeanImage(prtf.image, cx=0., cy=0., cz=0., output_r=True)
-        q=pix_to_q(r,1.035e-9, 0.7317, 0.000075*downsampling)
-        q/=1e09 #reciprocal nanometres
+        prtf_radavg, q = prtf_radial_average(d,downsampling)
         fig=pylab.figure('PRTF')
         ax1=fig.add_subplot(111)
         ax2=ax1.twiny()
@@ -257,12 +195,7 @@ def plot_prtf(di=None,legend=True, custom_legend=None, downsampling=8., plot_bey
             l=custom_legend[i]
         else:
             l=d
-        if plot_beyond_edge:
-            ax1.plot(q, prtf_radavg, '.-',lw=1.5, label=l)
-        else:
-            max_q=pix_to_q(s[0]/2,1.035e-9, 0.7317, 0.000075*downsampling)/1e09
-            new_q=q[q<=max_q]
-            ax1.plot(new_q, prtf_radavg[:len(new_q)], '.-',lw=1.5, label=l)
+        ax1.plot(new_q, prtf_radavg[:len(new_q)], '.-',lw=1.5, label=l)
         ax1Ticks = ax1.get_xticks()   
         ax2Ticks = ax1Ticks
         
@@ -280,7 +213,6 @@ def plot_prtf(di=None,legend=True, custom_legend=None, downsampling=8., plot_bey
     ax1.set_ylabel(r'PRTF', fontsize=18)
     ax1.axhline(1/e, c='k')
     spimage.sp_image_free(prtf)
-    return r,q
 
 
 def create_local_output_symlink(local_folder):
@@ -309,8 +241,6 @@ def unlink_all():
             print 'no symlinked output_mnt folder in '+d
 
 def save_absolute_phase_real_fourier(run_dir, output_folder, i=None, shift=True, save_img=True):
-    #matplotlib.use('Agg')
-    #matplotlib.ioff()
     if i==None:
         i=return_last_iteration_integer(os.path.join(run_dir, 'output_mnt'))
     model=spimage.sp_image_read('{r}/output_mnt/model_{i}.h5'.format(r=run_dir,i=i),0)
@@ -323,23 +253,15 @@ def save_absolute_phase_real_fourier(run_dir, output_folder, i=None, shift=True,
         fmodel=spimage.sp_image_shift(fmodel)
     s=shape(model.image)[0]/2
     matplotlib.rcParams.update({'font.size': 16})
-    #pylab.figure(1, figsize=(20,30))
-    f, ((ax1, ax2), (ax3, ax4)) = pylab.subplots(2, 2, figsize=(15,15))#, sharex='col', sharey='row')
-    #f(figsize=(10,15))
-    #f.set_figheight=50
-    #f.set_figweight=20
+    f, ((ax1, ax2), (ax3, ax4)) = pylab.subplots(2, 2, figsize=(15,15))
     ax1.set_title('Absolute')
     ax1.imshow(numpy.absolute(model.image[s,:,:]))
     ax2.set_title('Phase')
     ax2.imshow(numpy.angle(model.image[s,:,:]),cmap='PiYG')
     ax3.set_title('Real part')
-    #m=array(numpy.absolute(numpy.real(model.image[s,:,:]).min()), numpy.absolute(numpy.real(model.image[s,:,:]).max())).max()
-    #ax3.imshow(numpy.real(model.image[s,:,:]),vmin=-m, vmax=m, cmap='coolwarm')
     ax3.imshow(numpy.real(model.image[s,:,:]), cmap='coolwarm')
     ax4.set_title('Fourier')
     ax4.imshow(log10(absolute(fmodel.image[s,:,:])))
-    #f.set_figheight(10.)
-    #f.set_figwidth(5.)
     f.subplots_adjust(wspace=1,hspace=1)
     pylab.tight_layout()
     if save_img:
@@ -354,7 +276,6 @@ def save_pngs_all(i=None, output_folder='pngs', start_from=0):
     except:
         None
     rundirs=[d for d in os.listdir('.') if d.startswith('run_')]
-    #matplotlib.ioff()
     rundirs.sort()
     for r in rundirs[start_from:]:
         save_absolute_phase_real_fourier(r, output_folder, i)
@@ -408,7 +329,6 @@ def save_pngs_all_support(output_folder='pngs', start_from=0):
     except:
         None
     rundirs=[d for d in os.listdir('.') if d.startswith('run_')]
-    #matplotlib.ioff()
     rundirs.sort()
     for r in rundirs[start_from:]:
         show_support_fmodel_model_slice(r, save_imgs=True, output_folder=output_folder)
@@ -426,7 +346,7 @@ def plot_prtf_results_2D(d, input_image, shift_input=False, save_file=True, imag
     ax2.set_title('Input pattern')
     ax2.imshow(absolute(input_img.image*input_img.mask), norm=LogNorm())
     ax3.set_title('PRTF')
-    p=genfromtxt(os.path.join(d,'PRTF'))
+    prtf_radavg, q = prtf_radial_average(d,downsampling)
     ax3.plot(pix_to_q(p[:,0],1.035e-9, 0.7317, 0.0006), p[:,1], lw=1.5)
     ax3.set_xlabel(r'$|q|[nm^{-1}]$', fontsize=18)
     ax3.set_ylabel(r'$PRTF$', fontsize=18)
@@ -457,9 +377,8 @@ def plot_prtf_results_3D(d, input_image, downsampling, save_file=True, image_nam
     ax2.set_title('Input pattern')
     ax2.imshow(absolute(input_img.image*input_img.mask)[size/2,:,:], norm=LogNorm())
     ax3.set_title('PRTF')
-    p=genfromtxt(os.path.join(d,'PRTF'))
-    q=pix_to_q(p[:,0],1.035e-9, 0.7317, 0.000075*downsampling)
-    ax3.plot(q, p[:,1], lw=1.5)
+    prtf_radavg, q = prtf_radial_average(d,downsampling)
+    ax3.plot(q, prtf_radavg, lw=1.5)
     ax3.set_xlabel(r'$|q|[nm^{-1}]$', fontsize=18)
     ax3.set_ylabel(r'$PRTF$', fontsize=18)
     ax3.axhline(1/e, c='k')
@@ -482,7 +401,6 @@ def phase_shift(fmodel):
     c=shape(fmodel.image[:])[0]/2
     fmodel.image[:]/=fmodel.image[c,c,c]/absolute(fmodel.image[:])
     return fmodel
-
 
 def fourier_error(a,f,m, w=None):
     if w==None:
@@ -524,17 +442,6 @@ def radial_fourier_error(A,F,bins, weights=None, dim=None, pickle_output=False, 
         pickle.dump(array(ferr), open(file_name, 'wb'))
     else:
         return ferr, xbin
-
-
-
-
-
-
-    
-        #return array(ferr)[:,0]
-        #return sqrt(sum(array(ferr)[:,0])/sum(array(ferr)[:,1]))
-        #return sqrt((array(ferr)[:,0]*array(pir))/array(pir).sum())
-        #return average(array(ferr)[:,0], weights=array(pir))/array(pir).max()
 
 def resolution_weighted_fourier_error(fourier_error_array, wl=1.035e-09, ps=0.000075*4., dd=0.7317):
     fe=fourier_error_array[:,0]
@@ -609,14 +516,6 @@ def calc_average_img_translated(r2, r1=0, r_skip=None, iteration=None, reference
     new.image[:,:,:]=fft.fftn(added_img)
     spimage.sp_image_write(new,'avg_model_runs_{i}_{j}_iteration{k}.h5'.format(i=r1, j=r2, k=iteration),0)
     
-
-#Structured_errors=numpy.core.records.fromarrays(array(ferr).transpose(),names='fourier_error, radial bin', formats = 'f8, f8')
-
-    #return Structured_errors
-
-        #for r in errors['run']:
-#    ida_img.show_img_and_phase(r+'/output_mnt/model_4009.h5', save_fig=True, output_file='img_and_phase_model4009/'+r)
-
 def image_histogram(file_name, shift=False, mode='absolute', only_nonzero=True, cf=0., b=100):
     if mode=='absolute': f=numpy.absolute
     elif mode=='angle': f=numpy.angle
@@ -647,9 +546,6 @@ def real_space_residual_all_iterations(reference_file=None, support_file=None, i
     else:
         models=[i+'/output/' for i in os.listdir('.') if i.startswith('run_') and not i.startswith(skip)]
     models.sort()
-    #if skip!=None:
-    #    for s in skip:
-    #        models.remove('run_%04d/output_mnt/'%s)
     files_dir_0=models[0]
     print files_dir_0
     if iteration==None:
@@ -671,28 +567,18 @@ def real_space_residual_all_iterations(reference_file=None, support_file=None, i
         support_sp=spimage.sp_image_read(files_dir_0 + 'support_%04d.h5'%iteration,0)
         support_arr=real(support_sp.image[:])
         
-    #spimage.sp_image_free(support_sp)
     if reference_file!=None:
         reference_sp=spimage.sp_image_read(reference_file,0)
         reference=f(reference_sp.image[:])
-        #spimage.sp_image_free(reference_sp)
+        
     else:
         reference=support_arr.copy()
     rscs=[]   
     for m in models:
-        #embed()
         try:
             model_sp=spimage.sp_image_read(m+'model_%04d.h5'%iteration,0)
             model=f(model_sp.image[:])
             print m
-            #if normalize_ref_to_model:
-            #    reference*=mean(model)
-            #    rscs.append(stuff.real_space_residual(reference, model, support, normalize=False))
-            #else:
-            #if model_cf!=None:
-            #    support_arr=numpy.zeros_like(model)
-            #    support_arr[(model/model.max())>=model_cf]=1
-            #    print 'using {} pixels'.format(sum(support_arr))
             rscs.append(stuff.real_space_residual(reference, model, support=support_arr, normalize=True))
             spimage.sp_image_free(model_sp)
             del model
@@ -769,7 +655,6 @@ def plot_rsr(keys, mode, sort=False):
     clr_index = linspace(0.,1.,len(dirs))
     for i,d in enumerate(dirs):
         result=pickle.load(open(os.path.join(d, 'rsr_vs_runnumber.p')))
-        #embed()
         rsr=result[mode]
         if sort:
             rsr.sort()
