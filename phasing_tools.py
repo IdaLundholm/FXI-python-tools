@@ -1,12 +1,10 @@
 #!/usr/bin/env python
 
-import numpy
-from numpy import *
-import pylab
+import numpy as np
 import spimage
 import os
 from matplotlib.colors import LogNorm
-import matplotlib
+import matplotlib.pyplot as plt
 import sys
 from eke import image_manipulation
 import cPickle as pickle
@@ -22,23 +20,17 @@ def prep_emc_output_for_phasing(input_file, output_file):
     #set all negative values to 0:
     img.image[:,:,:]=img.image.clip(0)
     #set corners of mask to 1:
-    z_array = arange(img.image.shape[0]) - img.image.shape[0]/2. + 0.5
-    y_array = arange(img.image.shape[1]) - img.image.shape[1]/2. + 0.5
-    x_array = arange(img.image.shape[2]) - img.image.shape[2]/2. + 0.5
-    r_array = sqrt(x_array[:]**2 + y_array[:, newaxis]**2 + z_array[:, newaxis, newaxis]**2)
+    r_array = stuff.r_array_3D(img.image.shape[0])
     img.mask[r_array>img.image.shape[0]/2. + 0.5]=1
     spimage.sp_image_write(img,output_file,0)
 
 def mask_center(img_file_name, radius, output_file_name=None, save_file=True):
     """Create a new mask around the center with given radius"""
     img=spimage.sp_image_read(img_file_name,0)
-    z_array = arange(img.image.shape[0]) - img.image.shape[0]/2. + 0.5
-    y_array = arange(img.image.shape[1]) - img.image.shape[1]/2. + 0.5
-    x_array = arange(img.image.shape[2]) - img.image.shape[2]/2. + 0.5
-    r_array = sqrt(x_array[:]**2 + y_array[:, newaxis]**2 + z_array[:, newaxis, newaxis]**2)
+    r_array = stuff.r_array_3D(img.image.shape[0])
     img.mask[r_array<radius]=0
     img.mask[r_array>radius]=1
-    new_mask=spimage.sp_image_alloc(*shape(img.mask))
+    new_mask=spimage.sp_image_alloc(*np.shape(img.mask))
     new_mask.mask[:,:,:]=img.mask
     new_mask.image[:,:,:]=img.image
     new_mask.shifted=img.shifted
@@ -51,14 +43,14 @@ def mask_center(img_file_name, radius, output_file_name=None, save_file=True):
     
 def plot_error_per_iteration(dir='.', with_legend=True):
     """ Plots the errors saved in efourier.data and ereal.data files in given directory """
-    efourier=numpy.genfromtxt(dir+'/efourier.data')
-    ereal=numpy.genfromtxt(dir+'/ereal.data')
-    fig=pylab.figure('Phasing errors')
-    pylab.plot(range(len(efourier)), efourier, lw=2., c='r', label='Fourier error')
-    pylab.plot(range(len(ereal)), ereal, lw=2., c='k', label='Real error')
+    efourier=np.genfromtxt(dir+'/efourier.data')
+    ereal=np.genfromtxt(dir+'/ereal.data')
+    fig=plt.figure('Phasing errors')
+    plt.plot(range(len(efourier)), efourier, lw=2., c='r', label='Fourier error')
+    plt.plot(range(len(ereal)), ereal, lw=2., c='k', label='Real error')
     if with_legend:
-        pylab.legend()
-    pylab.show()
+        plt.legend()
+    plt.show()
 
 def extract_final_errors(path, pickle_output=True):
     """Reads fourier and real errors for last phasing iteration and returns structured array"""
@@ -70,40 +62,39 @@ def extract_final_errors(path, pickle_output=True):
         rundirs.sort()
         for d in rundirs:
             try:
-                errors.append([numpy.genfromtxt(d+'/efourier.data')[-1], numpy.genfromtxt(d+'/ereal.data')[-1], d])
+                errors.append([np.genfromtxt(d+'/efourier.data')[-1], np.genfromtxt(d+'/ereal.data')[-1], d])
             except:
                 print d + ' is not a directory or does not contain error files'
-        Structured_errors=numpy.core.records.fromarrays(array(errors).transpose(),names='fourier_error, real_error, run', formats = 'f8, f8, S8')
+        Structured_errors=np.core.records.fromarrays(np.array(errors).transpose(),names='fourier_error, real_error, run', formats = 'f8, f8, S8')
         if pickle_output:
             pickle.dump(Structured_errors, open(path+'/final_errors.p', 'wb'))
     return(Structured_errors)
     
 def plot_final_error_hist(path, b=10):
     errors=extract_final_errors(path)
-    fig=pylab.figure('Final Errors Histogram')
+    fig=plt.figure('Final Errors Histogram')
     fig.clear()
     fig.add_subplot(2,1,1)
-    pylab.hist(errors['fourier_error'], bins=b, label='Fourier error')
-    pylab.legend()
+    plt.hist(errors['fourier_error'], bins=b, label='Fourier error')
+    plt.legend()
     fig.add_subplot(2,1,2)
-    pylab.hist(errors['real_error'], bins=b, label='Real error')
-    pylab.legend()
+    plt.hist(errors['real_error'], bins=b, label='Real error')
+    plt.legend()
     
 def plot_final_errors(path, sort=True):
     errors=extract_final_errors(path)
-    fig=pylab.figure('Errors')
-    #fig.clear()
+    fig=plt.figure('Errors')
     fig.add_subplot(2,1,1)
     if sort:
         errors.sort(order='fourier_error')
-    pylab.title('Fourier error')
-    pylab.plot(range(len(errors['fourier_error'])), errors['fourier_error'])
+    plt.title('Fourier error')
+    plt.plot(range(len(errors['fourier_error'])), errors['fourier_error'])
     fig.add_subplot(2,1,2)
     if sort:
         errors.sort(order='real_error')
-    pylab.title('Real error')
-    pylab.plot(range(len(errors['real_error'])), errors['real_error'])
-    pylab.savefig(os.path.join(path, 'error_plot.png'))
+    plt.title('Real error')
+    plt.plot(range(len(errors['real_error'])), errors['real_error'])
+    plt.savefig(os.path.join(path, 'error_plot.png'))
 
 def select_by_error_cutoff(cutoff):
     try:
@@ -132,7 +123,7 @@ def calc_average_img(path, cutoff=None):
         except NameError:
             added_imgs=img.image
     avg_img=added_imgs/float(len(run_folders))
-    new=spimage.sp_image_alloc(*shape(img.image))
+    new=spimage.sp_image_alloc(*np.shape(img.image))
     new.image[:,:,:]=avg_img
     spimage.sp_image_write(new,'{p}/average_final_model_{c}_{t}.h5'.format(p=path,c=cutoff,t=time.strftime('%Y%m%d')),0)
 
@@ -159,22 +150,22 @@ def pix_to_q(x,wl, dd, ps):
 
 def pix_to_res(x, wl, dd, ps):
     #resolution element corresponds to half period resolution
-    return wl / 4. / numpy.sin( numpy.arctan2( x * ps, dd ) / 2. )
+    return wl / 4. / np.sin( np.arctan2( x * ps, dd ) / 2. )
 
 def pix_to_q_2(x,wl, dd, ps):
     return (2*ps)/(dd*wl)
 
 def prtf_radial_average(prtf_dir, downsampling):
     prtf=spimage.sp_image_read(os.path.join(prtf_dir,'PRTF-prtf.h5'),0)
-    s=shape(prtf.image)
+    s=np.shape(prtf.image)
     r,prtf_radavg=spimage.radialMeanImage(prtf.image, cx=0., cy=0., cz=0., output_r=True)
     q=pix_to_q(r,1.035e-9, 0.7317, 0.000075*downsampling)
     q/=1e09 #reciprocal nanometres
     q_edge=pix_to_q(s[0]/2,1.035e-9, 0.7317, 0.000075*downsampling)/1e09
     q_short=q[q<=q_edge] #Truncate prtf at detector edge
-    return prtf_radavg, q_short
+    return prtf_radavg[:len(q_short)], q_short
 
-def plot_prtf(di=None,legend=True, custom_legend=None, downsampling=8., plot_beyond_edge=False):
+def plot_prtf(di=None,legend=True, custom_legend=None, downsampling=8., plot_beyond_edge=False, save_file=True, output_file_name=None):
     '''When input is none, plots all prtf_output* directories availiabe, other input may be one directory or a list of directories'''
     if di==None:
         dir_list=[i for i in os.listdir('.') if i.startswith('prtf_output')]
@@ -188,14 +179,14 @@ def plot_prtf(di=None,legend=True, custom_legend=None, downsampling=8., plot_bey
         return None
     for i,d in enumerate(dir_list):
         prtf_radavg, q = prtf_radial_average(d,downsampling)
-        fig=pylab.figure('PRTF')
+        fig=plt.figure('PRTF')
         ax1=fig.add_subplot(111)
         ax2=ax1.twiny()
         if custom_legend!=None:
             l=custom_legend[i]
         else:
             l=d
-        ax1.plot(new_q, prtf_radavg[:len(new_q)], '.-',lw=1.5, label=l)
+        ax1.plot(q, prtf_radavg, '.-',lw=1.5, label=l)
         ax1Ticks = ax1.get_xticks()   
         ax2Ticks = ax1Ticks
         
@@ -211,8 +202,13 @@ def plot_prtf(di=None,legend=True, custom_legend=None, downsampling=8., plot_bey
     ax1.set_xlabel(r'$|q|[nm^{-1}]$', fontsize=18)
     ax2.set_xlabel(r'Full period resolution ($nm$)', fontsize=18)
     ax1.set_ylabel(r'PRTF', fontsize=18)
-    ax1.axhline(1/e, c='k')
-    spimage.sp_image_free(prtf)
+    ax1.axhline(1/math.e, c='k')
+    if save_file:
+        if output_file_name!=None:
+            plt.savefig(output_file_name)
+        else:
+            plt.savefig('prtf.png')
+    
 
 
 def create_local_output_symlink(local_folder):
@@ -251,24 +247,24 @@ def save_absolute_phase_real_fourier(run_dir, output_folder, i=None, shift=True,
     if shift:
         model=spimage.sp_image_shift(model)
         fmodel=spimage.sp_image_shift(fmodel)
-    s=shape(model.image)[0]/2
+    s=np.shape(model.image)[0]/2
     matplotlib.rcParams.update({'font.size': 16})
-    f, ((ax1, ax2), (ax3, ax4)) = pylab.subplots(2, 2, figsize=(15,15))
+    f, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15,15))
     ax1.set_title('Absolute')
-    ax1.imshow(numpy.absolute(model.image[s,:,:]))
+    ax1.imshow(np.absolute(model.image[s,:,:]))
     ax2.set_title('Phase')
-    ax2.imshow(numpy.angle(model.image[s,:,:]),cmap='PiYG')
+    ax2.imshow(np.angle(model.image[s,:,:]),cmap='PiYG')
     ax3.set_title('Real part')
-    ax3.imshow(numpy.real(model.image[s,:,:]), cmap='coolwarm')
+    ax3.imshow(np.real(model.image[s,:,:]), cmap='coolwarm')
     ax4.set_title('Fourier')
-    ax4.imshow(log10(absolute(fmodel.image[s,:,:])))
+    ax4.imshow(log10(np.absolute(fmodel.image[s,:,:])))
     f.subplots_adjust(wspace=1,hspace=1)
-    pylab.tight_layout()
+    plt.tight_layout()
     if save_img:
-        pylab.savefig(os.path.join(output_folder,run_dir+'.png'))
+        plt.savefig(os.path.join(output_folder,run_dir+'.png'))
     spimage.sp_image_free(model)
     spimage.sp_image_free(fmodel)
-    pylab.close(f)
+    plt.close(f)
 
 def save_pngs_all(i=None, output_folder='pngs', start_from=0):
     try:
@@ -287,20 +283,20 @@ def show_support_fmodel_model_slice(run_dir, iteration=None, save_imgs=False, ou
     model=spimage.sp_image_shift(spimage.sp_image_read('{r}/output_mnt/model_{i}.h5'.format(r=run_dir, i=iteration),0))
     fmodel=spimage.sp_image_shift(spimage.sp_image_read('{r}/output_mnt/fmodel_{i}.h5'.format(r=run_dir, i=iteration),0))
     support=spimage.sp_image_shift(spimage.sp_image_read('{r}/output_mnt/support_{i}.h5'.format(r=run_dir, i=iteration),0))
-    s=shape(model.image)[0]/2
+    s=np.shape(model.image)[0]/2
     matplotlib.rcParams.update({'font.size': 16})
-    f, ((ax1, ax2), (ax3, ax4)) = pylab.subplots(2, 2, figsize=(15,15))
+    f, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15,15))
     ax1.set_title('Model')
-    ax1.imshow(absolute(model.image[s,:,:]))
+    ax1.imshow(np.absolute(model.image[s,:,:]))
     ax2.set_title('Fourier amplitude')
-    ax2.imshow(log10(absolute(fmodel.image[s,:,:])))
+    ax2.imshow(log10(np.absolute(fmodel.image[s,:,:])))
     ax3.set_title('Support')
-    ax3.imshow(absolute(support.image[s,:,:]))
+    ax3.imshow(np.absolute(support.image[s,:,:]))
     ax4.set_title('Support x Model')
-    ax4.imshow(absolute(support.image[s,:,:])*absolute(model.image[s,:,:]))
+    ax4.imshow(np.absolute(support.image[s,:,:])*absolute(model.image[s,:,:]))
     if save_imgs:
-        pylab.savefig(os.path.join(output_folder,run_dir+'.png'))
-        pylab.close(f)
+        plt.savefig(os.path.join(output_folder,run_dir+'.png'))
+        plt.close(f)
 
 def show_support_fmodel_model_slice_2D(run_dir, iteration=None, save_imgs=False, output_folder='pngs'):
     if iteration==None:
@@ -309,19 +305,19 @@ def show_support_fmodel_model_slice_2D(run_dir, iteration=None, save_imgs=False,
     model=spimage.sp_image_shift(spimage.sp_image_read('{r}/output_mnt/model_{i}.h5'.format(r=run_dir, i=iteration),0))
     fmodel=spimage.sp_image_shift(spimage.sp_image_read('{r}/output_mnt/fmodel_{i}.h5'.format(r=run_dir, i=iteration),0))
     support=spimage.sp_image_shift(spimage.sp_image_read('{r}/output_mnt/support_{i}.h5'.format(r=run_dir, i=iteration),0))
-    s=shape(model.image)[0]/2
+    s=np.shape(model.image)[0]/2
     matplotlib.rcParams.update({'font.size': 16})
-    f, (ax1, ax2, ax3) = pylab.subplots(1, 3, figsize=(30,10))
+    f, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(30,10))
     ax1.set_title('Model')
-    ax1.imshow(absolute(model.image))
+    ax1.imshow(np.absolute(model.image))
     ax2.set_title('Fourier amplitude')
-    ax2.imshow(log10(absolute(fmodel.image)))
+    ax2.imshow(log10(np.absolute(fmodel.image)))
     ax3.set_title('Support')
-    ax3.imshow(absolute(support.image))
-    pylab.tight_layout() 
+    ax3.imshow(np.absolute(support.image))
+    plt.tight_layout() 
     if save_imgs:
-        pylab.savefig(os.path.join(output_folder,run_dir+'.png'))
-        pylab.close(f)
+        plt.savefig(os.path.join(output_folder,run_dir+'.png'))
+        plt.close(f)
         
 def save_pngs_all_support(output_folder='pngs', start_from=0):
     try:
@@ -334,7 +330,7 @@ def save_pngs_all_support(output_folder='pngs', start_from=0):
         show_support_fmodel_model_slice(r, save_imgs=True, output_folder=output_folder)
 
 def plot_prtf_results_2D(d, input_image, shift_input=False, save_file=True, image_name = 'PRTF_results.png'):
-    f, ((ax1, ax2, ax3),(ax4, ax5, ax6)) = pylab.subplots(2, 3, figsize=(30,20))
+    f, ((ax1, ax2, ax3),(ax4, ax5, ax6)) = plt.subplots(2, 3, figsize=(30,20))
     ax1.set_title('Average Real space')
     avg_img=spimage.sp_image_shift(spimage.sp_image_read(os.path.join(d,'PRTF-avg_image.h5'), 0))
     avg_f=spimage.sp_image_shift(spimage.sp_image_read(os.path.join(d,'PRTF-avg_fft.h5'), 0))
@@ -342,71 +338,77 @@ def plot_prtf_results_2D(d, input_image, shift_input=False, save_file=True, imag
         input_img=spimage.sp_image_shift(spimage.sp_image_read(input_image,0))
     else:
         input_img=spimage.sp_image_read(input_image,0)
-    ax1.imshow(absolute(avg_img.image))
+    ax1.imshow(np.absolute(avg_img.image))
     ax2.set_title('Input pattern')
-    ax2.imshow(absolute(input_img.image*input_img.mask), norm=LogNorm())
+    ax2.imshow(np.absolute(input_img.image*input_img.mask), norm=LogNorm())
     ax3.set_title('PRTF')
     prtf_radavg, q = prtf_radial_average(d,downsampling)
     ax3.plot(pix_to_q(p[:,0],1.035e-9, 0.7317, 0.0006), p[:,1], lw=1.5)
     ax3.set_xlabel(r'$|q|[nm^{-1}]$', fontsize=18)
     ax3.set_ylabel(r'$PRTF$', fontsize=18)
-    ax3.axhline(1/e, c='k')
+    ax3.axhline(1/math.e, c='k')
     ax4.set_title('Phase')
-    ax4.imshow(numpy.angle(avg_img.image),cmap='PiYG')
+    ax4.imshow(np.angle(avg_img.image),cmap='PiYG')
     ax5.set_title('Average Fourier Space')
-    ax5.imshow(absolute(avg_f.image))
+    ax5.imshow(np.absolute(avg_f.image))
     ax6.set_title('Errors')
     errors=extract_final_errors(os.getcwd())
     errors.sort(order='fourier_error')
     ax6.plot(range(len(errors['fourier_error'])), errors['fourier_error'], lw=1.5, c='r', label='Fourier Error')
     errors.sort(order='real_error')
     ax6.plot(range(len(errors['real_error'])), errors['real_error'], lw=1.5, c='g', label='Real Error')
-    pylab.legend()
-    pylab.tight_layout()
+    plt.legend()
+    plt.tight_layout()
     if save_file:
-        pylab.savefig(image_name)
+        plt.savefig(image_name)
         
-def plot_prtf_results_3D(d, input_image, downsampling, save_file=True, image_name = 'PRTF_results.png'):
-    f, ((ax1, ax2, ax3),(ax4, ax5, ax6)) = pylab.subplots(2, 3, figsize=(20,13))
+def plot_prtf_results_3D(d, input_image, downsampling, save_file=True, image_name = 'PRTF_results.png', zoom=True):
+    f, ((ax1, ax2, ax3),(ax4, ax5, ax6)) = plt.subplots(2, 3, figsize=(20,13))
     ax1.set_title('Average Real space')
     avg_img=spimage.sp_image_shift(spimage.sp_image_read(os.path.join(d,'PRTF-avg_image.h5'), 0))
     avg_f=spimage.sp_image_shift(spimage.sp_image_read(os.path.join(d,'PRTF-avg_fft.h5'), 0))
     input_img=spimage.sp_image_read(input_image,0)
-    size=shape(input_img.image)[0]
-    ax1.imshow(absolute(avg_img.image)[size/2,:,:])
+    size=np.shape(input_img.image)[0]
+    sl=(size/2, slice(None), slice(None))
+    if zoom:
+        z=(size-np.count_nonzero(avg_img.image[size/2, size/2, :]))/2.2
+        sl_real=(size/2, slice(z, size-z), slice(z,size-z))
+    else:
+        sl_real=sl
+    ax1.imshow(np.absolute(avg_img.image)[sl_real])
     ax2.set_title('Input pattern')
-    ax2.imshow(absolute(input_img.image*input_img.mask)[size/2,:,:], norm=LogNorm())
+    ax2.imshow(np.absolute(input_img.image*input_img.mask)[sl], norm=LogNorm())
     ax3.set_title('PRTF')
     prtf_radavg, q = prtf_radial_average(d,downsampling)
     ax3.plot(q, prtf_radavg, lw=1.5)
     ax3.set_xlabel(r'$|q|[nm^{-1}]$', fontsize=18)
     ax3.set_ylabel(r'$PRTF$', fontsize=18)
-    ax3.axhline(1/e, c='k')
+    ax3.axhline(1/math.e, c='k')
     ax4.set_title('Phase')
-    ax4.imshow(numpy.angle(avg_img.image)[size/2,:,:],cmap='PiYG')
+    ax4.imshow(np.angle(avg_img.image)[sl_real],cmap='PiYG')
     ax5.set_title('Average Fourier Space')
-    ax5.imshow(absolute(avg_f.image)[size/2,:,:])
+    ax5.imshow(np.absolute(avg_f.image)[sl])
     ax6.set_title('Errors')
     errors=extract_final_errors(os.getcwd())
     errors.sort(order='fourier_error')
-    ax6.plot(range(len(errors['fourier_error'])), errors['fourier_error'], lw=1.5, c='r', label='Fourier Error')
+    ax6.plot(range(len(errors['fourier_error'])), errors['fourier_error'], lw=1.5, label='Fourier Error')
     errors.sort(order='real_error')
-    ax6.plot(range(len(errors['real_error'])), errors['real_error'], lw=1.5, c='g', label='Real Error')
-    pylab.legend()
-    pylab.tight_layout()
+    ax6.plot(range(len(errors['real_error'])), errors['real_error'], lw=1.5, label='Real Error')
+    plt.legend()
+    plt.tight_layout()
     if save_file:
-        pylab.savefig(image_name)
+        plt.savefig(image_name)
 
 def phase_shift(fmodel):
-    c=shape(fmodel.image[:])[0]/2
-    fmodel.image[:]/=fmodel.image[c,c,c]/absolute(fmodel.image[:])
+    c=np.shape(fmodel.image[:])[0]/2
+    fmodel.image[:]/=fmodel.image[c,c,c]/np.absolute(fmodel.image[:])
     return fmodel
 
 def fourier_error(a,f,m, w=None):
     if w==None:
-        w=numpy.ones(shape(a))
-    efourier_nom=pow((absolute(f[where(m)])-absolute(a[where(m)])),2)*w[where(m)]
-    efourier_den=sum(pow(absolute(a[where(m)]),2))+sum(pow(absolute(f[where(~m)]),2))
+        w=np.ones(np.shape(a))
+    efourier_nom=np.pow((np.absolute(f[np.where(m)])-np.absolute(a[np.where(m)])),2)*w[np.where(m)]
+    efourier_den=np.sum(np.pow(np.absolute(a[np.where(m)]),2))+np.sum(np.pow(np.absolute(f[np.where(~m)]),2))
     return sqrt(efourier_nom.sum()/efourier_den)
 
 def resolution_weights(dim, mask, wl=1.035e-09, ps=0.000075*4., dd=0.7317):
@@ -421,7 +423,7 @@ def radial_weights(dim, mask):
 
 def radial_fourier_error(A,F,bins, weights=None, dim=None, pickle_output=False, file_name=None):
     if dim==None:
-        dim=shape(A.image)[0]
+        dim=np.shape(A.image)[0]
     r_array=stuff.r_array_3D(dim)
     bin_range=linspace(0,dim/2,bins)
     ferr=[]
@@ -445,7 +447,7 @@ def radial_fourier_error(A,F,bins, weights=None, dim=None, pickle_output=False, 
 
 def resolution_weighted_fourier_error(fourier_error_array, wl=1.035e-09, ps=0.000075*4., dd=0.7317):
     fe=fourier_error_array[:,0]
-    index=~numpy.isnan(fe)
+    index=~np.isnan(fe)
     x_pix=fourier_error_array[index,1]
     q=pix_to_q(x_pix, wl, dd, ps)
     res=1e09/q
@@ -478,7 +480,7 @@ def calc_average_img(r2, r1=0, r_skip=None, iteration=None):
     added_real/=float(len(rundir_range)-fail)
     added_imag/=float(len(rundir_range)-fail)
     complex_fmodel=added_real+1j*added_imag
-    new=spimage.sp_image_alloc(*shape(added_real))
+    new=spimage.sp_image_alloc(*np.shape(added_real))
     new.phased=1
     new.mask[:]=mask
     new.image[:]=complex_fmodel
@@ -508,7 +510,7 @@ def calc_average_img_translated(r2, r1=0, r_skip=None, iteration=None, reference
             spimage.sp_image_superimpose(ref, f, 0)
         added_img+=f.image[:]
     added_img/=float(len(rundir_range))
-    new=spimage.sp_image_alloc(*shape(added_img))
+    new=spimage.sp_image_alloc(*np.shape(added_img))
     new.phased=1
     new.mask[:]=mask
     new.image[:]=added_img
@@ -517,10 +519,10 @@ def calc_average_img_translated(r2, r1=0, r_skip=None, iteration=None, reference
     spimage.sp_image_write(new,'avg_model_runs_{i}_{j}_iteration{k}.h5'.format(i=r1, j=r2, k=iteration),0)
     
 def image_histogram(file_name, shift=False, mode='absolute', only_nonzero=True, cf=0., b=100):
-    if mode=='absolute': f=numpy.absolute
-    elif mode=='angle': f=numpy.angle
-    elif mode=='real': f=numpy.real
-    elif mode=='imag': f=numpy.imag
+    if mode=='absolute': f=np.absolute
+    elif mode=='angle': f=np.angle
+    elif mode=='real': f=np.real
+    elif mode=='imag': f=np.imag
 
     if type(file_name)=='str':
         img=spimage.sp_image_read(file_name, 0)
@@ -532,14 +534,14 @@ def image_histogram(file_name, shift=False, mode='absolute', only_nonzero=True, 
         flat_img=flat_img[flat_img!=0.]
     if cf!=0.:
         flat_img=flat_img[flat_img>cf]
-    pylab.hist(flat_img, bins=b)
+    plt.hist(flat_img, bins=b)
     return flat_img
 
 def real_space_residual_all_iterations(reference_file=None, support_file=None, iteration=None, mode='absolute', normalize_ref_to_model=False, skip='None', model_cf=None):
-    if mode=='absolute': f=numpy.absolute
-    elif mode=='angle': f=numpy.angle
-    elif mode=='real': f=numpy.real
-    elif mode=='imag': f=numpy.imag
+    if mode=='absolute': f=np.absolute
+    elif mode=='angle': f=np.angle
+    elif mode=='real': f=np.real
+    elif mode=='imag': f=np.imag
 
     if os.getcwd().startswith('/mnt'):
         models=[i+'/output_mnt/' for i in os.listdir('.') if i.startswith('run_') and not i.startswith(skip)]
@@ -558,7 +560,7 @@ def real_space_residual_all_iterations(reference_file=None, support_file=None, i
     elif model_cf!=None:
         prtf_dir=[d for d in os.listdir('.') if d.startswith('prtf')]
         avg_model=f(spimage.sp_image_read(os.path.join(prtf_dir[0], 'PRTF-avg_image.h5'),0).image[:])
-        support_arr=numpy.zeros_like(avg_model)
+        support_arr=np.zeros_like(avg_model)
         support_arr[(avg_model/avg_model.max())>=model_cf]=1
         print 'using {} pixels'.format(sum(support_arr))
         
@@ -593,26 +595,26 @@ def pickle_rsr_all_iterations(skip='None', functions=['absolute', 'angle', 'real
             all_rsr=column_stack((all_rsr, rsr))
         except:
             all_rsr=rsr
-        print shape(all_rsr)
+        print np.shape(all_rsr)
     if len(functions)>1:
-        Structured_rsr=numpy.core.records.fromarrays(array(all_rsr).transpose(),
+        Structured_rsr=np.core.records.fromarrays(np.array(all_rsr).transpose(),
                                                      names=', '.join(functions),
                                                      formats = ', '.join(['f8',]*len(functions)))
     else:
-        print array(rsr).dtype
-        Structured_rsr=numpy.core.records.array(array(rsr), dtype=[(functions[0], 'float32')])
+        print np.array(rsr).dtype
+        Structured_rsr=np.core.records.array(np.array(rsr), dtype=[(functions[0], 'float32')])
     pickle.dump(Structured_rsr, open('rsr_vs_runnumber.p', 'wb'))
 
 def pickle_rsr_with_cf_all_iterations(skip='None', cf=0.1):
     rsr=real_space_residual_all_iterations(mode='absolute', skip=skip, model_cf=cf)
-    Structured_rsr=numpy.core.records.array(array(rsr), dtype=[('absolute', 'float32')])
+    Structured_rsr=np.core.records.array(np.array(rsr), dtype=[('absolute', 'float32')])
     pickle.dump(Structured_rsr, open('rsr_vs_runnumber_cf{}.p'.format(cf), 'wb'))
     
 def real_space_residual_prtf_avg_image(reference_file=None, support_file=None, prtf_dir=None, d='.', mode='absolute'):
-    if mode=='absolute': f=numpy.absolute
-    elif mode=='angle': f=numpy.angle
-    elif mode=='real': f=numpy.real
-    elif mode=='imag': f=numpy.imag
+    if mode=='absolute': f=np.absolute
+    elif mode=='angle': f=np.angle
+    elif mode=='real': f=np.real
+    elif mode=='imag': f=np.imag
 
     iteration=return_last_iteration_integer(os.path.join(d, 'run_0000/output_mnt'))
     if prtf_dir!=None:
@@ -658,5 +660,5 @@ def plot_rsr(keys, mode, sort=False):
         rsr=result[mode]
         if sort:
             rsr.sort()
-        pylab.plot(rsr, label=labels[i], lw=1.5, color=cmap(clr_index[i]))
-    pylab.legend(loc='upper left')
+        plt.plot(rsr, label=labels[i], lw=1.5, color=cmap(clr_index[i]))
+    plt.legend(loc='upper left')

@@ -41,7 +41,7 @@ def show_img_times_mask(input_file,s='x', save_file=True, output_file_name=None)
     if len(shape(im.image))==2:
         fig=plt.figure('image and mask',figsize=(10,10))
         fig.clear()
-        pylab.imshow(np.absolute(im.image)*im.mask, norm=LogNorm())
+        plt.imshow(np.absolute(im.image)*im.mask, norm=LogNorm())
         plt.colorbar()
     if len(shape(im.image))==3:
         if s=='x':
@@ -50,12 +50,12 @@ def show_img_times_mask(input_file,s='x', save_file=True, output_file_name=None)
             sl=(slice(None),shape(im.image)[0]/2,slice(None))
         if s=='z':
             sl=(slice(None),slice(None),shape(im.image)[0]/2)
-        fig=pylab.figure('image and mask',figsize=(10,10))
+        fig=plt.figure('image and mask',figsize=(10,10))
         fig.clear()
         fig.add_subplot(2,1,1)
-        plt.imshow(numpy.absolute(im.image[0,:,:])*im.mask[0,:,:], norm=LogNorm())
+        plt.imshow(np.absolute(im.image[0,:,:])*im.mask[0,:,:], norm=LogNorm())
         fig.add_subplot(2,1,2)
-        plt.imshow(numpy.absolute(im.image[sl])*im.mask[sl], norm=LogNorm())
+        plt.imshow(np.absolute(im.image[sl])*im.mask[sl], norm=LogNorm())
     if save_file:
         if output_file_name==None:
             plt.savefig(input_file.replace('h5', 'png'))
@@ -80,10 +80,10 @@ def show_x_y_z_slice_emc_output(input_file, prefix='slice fig', save_file=False)
 
 def show_x_y_z_slice(input_file, shift=True, mode='absolute', added_slice=False, one_slice=False, prefix='slice fig', save_file=False, mask=False, mask_array=None, mask_center=False, pix=13.5, log_scale=False):
     "Plot x, y and z slices of image. Choices: shift image, true or false, mode: absolute, angle, real or imag. added_slice true or false, one_slice true or false, shows only x slice if true, prefix sets image name, save_file true or false, mask true or false, if true masks image with mask, log_scale true (norm=LogNorm()) or false"
-    if mode=='absolute': f=numpy.absolute
-    elif mode=='angle': f=numpy.angle
-    elif mode=='real': f=numpy.real
-    elif mode=='imag': f=numpy.imag
+    if mode=='absolute': f=np.absolute
+    elif mode=='angle': f=np.angle
+    elif mode=='real': f=np.real
+    elif mode=='imag': f=np.imag
     print f
     n=None
     if log_scale:
@@ -97,7 +97,7 @@ def show_x_y_z_slice(input_file, shift=True, mode='absolute', added_slice=False,
         print 'image is not read'
         im=input_file
 
-    cm='jet'
+    cm='viridis'
     if mode!='absolute' and log_scale==False:
         cm='RdYlBu'
         cm='seismic'
@@ -140,7 +140,7 @@ def show_x_y_z_slice(input_file, shift=True, mode='absolute', added_slice=False,
         else:
             plt.imshow(f(im.image[c,:,:]),vmax=vmax, vmin=vmin, norm=n, cmap=cm)
         fig.add_subplot(1,3,2)
-        pylab.title('Y slice')
+        plt.title('Y slice')
         if added_slice:
             plt.imshow(f(np.sum(im.image, axis=1)), vmax=vmax, vmin=vmin, norm=n, cmap=cm)
         else:
@@ -168,9 +168,9 @@ def show_center_speckle_mask(input_file, radius_array, prefix='center_speckle_ma
         ax[i][1].imshow(np.absolute(img.image[c-img_dim:c+img_dim,c,c-img_dim:c+img_dim])*mask.mask[c-img_dim:c+img_dim,c, c-img_dim:c+img_dim], interpolation='nearest')
         ax[i][2].imshow(np.absolute(img.image[c-img_dim:c+img_dim,c-img_dim:c+img_dim, c])*mask.mask[c-img_dim:c+img_dim,c-img_dim:c+img_dim, c], interpolation='nearest')
         
-    pylab.tight_layout()
+    plt.tight_layout()
     if save_img:
-        pylab.savefig(prefix)
+        plt.savefig(prefix)
 
 
 def show_slice(input_file, shift=True):
@@ -180,7 +180,7 @@ def show_slice(input_file, shift=True):
     s=np.shape(im.image)[0]/2
     fig=plt.figure(1, figsize=(10,10))
     fig.clear()
-    plt.imshow(numpy.absolute(im.image)[s,:,:])
+    plt.imshow(np.absolute(im.image)[s,:,:])
 
 def show_img_and_phase(input_file, save_fig=False, output_file=None, shift=True):
     im=spimage.sp_image_read(input_file,0)
@@ -226,15 +226,15 @@ def show_absolute_phase_real(input_file, shift=True, save_img=False):
     fig=plt.figure(1,figsize=(25,10))
     fig.clear()
     fig.add_subplot(1,3,1)
-    pylab.title('Absolute')
-    pylab.imshow(np.absolute(im.image[s,:,:]))
+    plt.title('Absolute')
+    plt.imshow(np.absolute(im.image[s,:,:]))
     fig.add_subplot(1,3,2)
     plt.title('Phase')
     plt.imshow(np.angle(im.image[s,:,:]),cmap='PiYG')
     fig.add_subplot(1,3,3)
     plt.title('Real part')
     m=array(np.absolute(np.real(im.image[64,:,:]).min()), np.absolute(np.real(im.image[s,:,:]).max())).max()
-    plt.imshow(numpy.real(im.image[s,:,:]),vmin=-m, vmax=m, cmap='coolwarm')
+    plt.imshow(np.real(im.image[s,:,:]),vmin=-m, vmax=m, cmap='coolwarm')
     plt.tight_layout()
     if save_img:
         path='/'.join(input_file.split('/')[:-1])
@@ -249,7 +249,7 @@ def plot_img_with_circle(image_file_name, r=20.):
     negatives=np.real(img.image)
     print shape(negatives)
     negatives[np.real(img.image)>0.]=0.
-    pylab.imshow(np.absolute(img.image))
+    plt.imshow(np.absolute(img.image))
     fig.gca().add_artist(circle1)
 
 def show_support_fmodel_model_slice(run_dir, iteration=None, save_imgs=False, output_folder='pngs', s='x'):
@@ -405,8 +405,8 @@ def plot_individual_phasing_results(n, png_output, iteration, n_start=0, sort_by
         axes[2][1].imshow(real_phase[new_dim:-new_dim,dim/2,new_dim:-new_dim], cmap='RdBu')
         axes[2][2].imshow(real_phase[new_dim:-new_dim,new_dim:-new_dim,dim/2], cmap='RdBu')
         print str(sorting_order[j])
-        pylab.savefig(png_output+'/%s_%04d.png'%(str(sorting_order[j]), j))
-        pylab.close(fig)
+        plt.savefig(png_output+'/%s_%04d.png'%(str(sorting_order[j]), j))
+        plt.close(fig)
 
 def plot_model_fdiff(j, png_output, iteration):
     try:
@@ -472,10 +472,10 @@ def radavg_from_file(file_name, mode='absolute', mask=False, log_scale=False, sh
     if not mask:
         msk=np.ones_like(im.image)
 
-    if mode=='absolute': f=numpy.absolute
-    elif mode=='angle': f=numpy.angle
-    elif mode=='real': f=numpy.real
-    elif mode=='imag': f=numpy.imag
+    if mode=='absolute': f=np.absolute
+    elif mode=='angle': f=np.angle
+    elif mode=='real': f=np.real
+    elif mode=='imag': f=np.imag
 
     radavg=spimage.radialMeanImage(f(im.image[sl]), msk=msk[sl]) #cx=im.detector.image_center[0], cy=im.detector.image_center[1])
     if log_scale:
