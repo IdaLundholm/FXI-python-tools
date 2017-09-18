@@ -13,6 +13,7 @@ import time
 from scipy.special import cbrt
 from scipy.signal import argrelextrema
 import h5py
+from IPython import embed
 
 
 def slice_3D(fn, output_dir=''):
@@ -249,6 +250,10 @@ def smooth(y, box_pts):
     y_smooth = numpy.convolve(y, box, mode='same')
     return y_smooth
 
+def diff_window(a, window_size, smooth_box):
+    a_smooth=stuff.smooth(a,smooth_box)
+    return a_smooth[window_size:]-a_smooth[:-window_size]
+
 def calc_resolution_at_pix(pix):
     return 1.035e-09*(0.7317/(pix/2*0.0003))
 
@@ -372,12 +377,13 @@ def real_space_residual(Rho_ref, Rho_rec, support=None, normalize=True):
     For nucleic acid structures, RSR may also be calculated separately for base, 
     sugar and phosphate moieties of the nucleic acid monomer. RSR is generally 
     considered an excellent model-validation tool.'''
-    if support==None:
-        R1=Rho_ref*ones_like(Rho_ref)
-        R2=Rho_rec*ones_like(Rho_rec)
-    else:
+    #embed()
+    if support is not None:
         R1=Rho_ref[support==1]
         R2=Rho_rec[support==1]
+    else:
+        R1=Rho_ref*ones_like(Rho_ref)
+        R2=Rho_rec*ones_like(Rho_rec)
     if normalize:
         R1/=R1.max()
         R2/=R2.max()

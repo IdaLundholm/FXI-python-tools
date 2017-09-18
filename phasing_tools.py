@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
 import numpy as np
+import scipy.stats
+from scipy import ndimage
 import spimage
 import os
 from matplotlib.colors import LogNorm
@@ -10,11 +12,13 @@ from eke import image_manipulation
 import cPickle as pickle
 import time
 import math
-import Ida_python_tools.stuff as stuff
+import FXI_python_tools.stuff as stuff
 import h5py
 from IPython import embed
 
-def prep_emc_output_for_phasing(input_file, output_file):
+reload(stuff)
+
+def prep_emc_output_for_phasing(input_file, output_file, corner_to_zero=False):
     "Sets all negative values in image to 0 and create a rectangular mask"
     img=spimage.sp_image_read(input_file,0)
     #set all negative values to 0:
@@ -22,6 +26,8 @@ def prep_emc_output_for_phasing(input_file, output_file):
     #set corners of mask to 1:
     r_array = stuff.r_array_3D(img.image.shape[0])
     img.mask[r_array>img.image.shape[0]/2. + 0.5]=1
+    if corner_to_zero:
+        img.image[r_array>img.image.shape[0]]=0.
     spimage.sp_image_write(img,output_file,0)
 
 def mask_center(img_file_name, radius, output_file_name=None, save_file=True):
@@ -155,6 +161,16 @@ def pix_to_res(x, wl, dd, ps):
 def pix_to_q_2(x,wl, dd, ps):
     return (2*ps)/(dd*wl)
 
+def radial_average_q(file_name, downsampling):
+    img=spimage.sp_image_read(file_name,0)
+    s=np.shape(img.image)
+    r,radavg=spimage.radialMeanImage(img.image, cx=0., cy=0., cz=0., output_r=True)
+    q=pix_to_q(r,1.035e-9, 0.7317, 0.000075*downsampling)
+    q/=1e09 #reciprocal nanometres
+    q_edge=pix_to_q(s[0]/2,1.035e-9, 0.7317, 0.000075*downsampling)/1e09
+    q_short=q[q<=q_edge] #Truncate prtf at detector edge
+    return radavg[:len(q_short)], q_short
+
 def prtf_radial_average(prtf_dir, downsampling):
     prtf=spimage.sp_image_read(os.path.join(prtf_dir,'PRTF-prtf.h5'),0)
     s=np.shape(prtf.image)
@@ -248,7 +264,7 @@ def save_absolute_phase_real_fourier(run_dir, output_folder, i=None, shift=True,
         model=spimage.sp_image_shift(model)
         fmodel=spimage.sp_image_shift(fmodel)
     s=np.shape(model.image)[0]/2
-    matplotlib.rcParams.update({'font.size': 16})
+    #matplotlib.rcParams.update({'font.size': 16})
     f, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15,15))
     ax1.set_title('Absolute')
     ax1.imshow(np.absolute(model.image[s,:,:]))
@@ -257,7 +273,7 @@ def save_absolute_phase_real_fourier(run_dir, output_folder, i=None, shift=True,
     ax3.set_title('Real part')
     ax3.imshow(np.real(model.image[s,:,:]), cmap='coolwarm')
     ax4.set_title('Fourier')
-    ax4.imshow(log10(np.absolute(fmodel.image[s,:,:])))
+    ax4.imshow(np.absolute(fmodel.image[s,:,:]), norm=LogNorm())
     f.subplots_adjust(wspace=1,hspace=1)
     plt.tight_layout()
     if save_img:
@@ -371,10 +387,11 @@ def plot_prtf_results_3D(d, input_image, downsampling, save_file=True, image_nam
     size=np.shape(input_img.image)[0]
     sl=(size/2, slice(None), slice(None))
     if zoom:
-        z=(size-np.count_nonzero(avg_img.image[size/2, size/2, :]))/2.2
+        z=int((size-np.count_nonzero(avg_img.image[size/2, size/2, :]))/2.2)
         sl_real=(size/2, slice(z, size-z), slice(z,size-z))
-    else:
+    elif zoom==False:
         sl_real=sl
+    print sl_real
     ax1.imshow(np.absolute(avg_img.image)[sl_real])
     ax2.set_title('Input pattern')
     ax2.imshow(np.absolute(input_img.image*input_img.mask)[sl], norm=LogNorm())
@@ -518,22 +535,30 @@ def calc_average_img_translated(r2, r1=0, r_skip=None, iteration=None, reference
     new.image[:,:,:]=fft.fftn(added_img)
     spimage.sp_image_write(new,'avg_model_runs_{i}_{j}_iteration{k}.h5'.format(i=r1, j=r2, k=iteration),0)
     
-def image_histogram(file_name, shift=False, mode='absolute', only_nonzero=True, cf=0., b=100):
+def image_histogram(file_name, shift=False, mode='absolute', only_nonzero=True, cf=0., radius_cutoff=None, b=100):
     if mode=='absolute': f=np.absolute
     elif mode=='angle': f=np.angle
     elif mode=='real': f=np.real
     elif mode=='imag': f=np.imag
-
-    if type(file_name)=='str':
+    print type(file_name)
+    if type(file_name)==str:
         img=spimage.sp_image_read(file_name, 0)
-    if type(file_name)!='str':
+    elif type(file_name)!=str:
         img=file_name
-    flat_img=f(img.image[:]).flatten()
+    if shift:
+        print 'shifting image'
+        img=spimage.sp_image_shift(img)
+    if radius_cutoff!=None:
+        r=stuff.r_array_3D(np.shape(img.image)[0])
+        new_img=img.image[np.where(r<radius_cutoff)]
+        flat_img=f(new_img).flatten()
+    else:
+        flat_img=f(img.image[:]).flatten()
     print flat_img
     if only_nonzero:
         flat_img=flat_img[flat_img!=0.]
     if cf!=0.:
-        flat_img=flat_img[flat_img>cf]
+        flat_img=flat_img[flat_img>cf]        
     plt.hist(flat_img, bins=b)
     return flat_img
 
@@ -562,7 +587,7 @@ def real_space_residual_all_iterations(reference_file=None, support_file=None, i
         avg_model=f(spimage.sp_image_read(os.path.join(prtf_dir[0], 'PRTF-avg_image.h5'),0).image[:])
         support_arr=np.zeros_like(avg_model)
         support_arr[(avg_model/avg_model.max())>=model_cf]=1
-        print 'using {} pixels'.format(sum(support_arr))
+        print 'using {} pixels'.format(np.sum(support_arr))
         
     else:
         print models[0]
@@ -592,7 +617,7 @@ def pickle_rsr_all_iterations(skip='None', functions=['absolute', 'angle', 'real
     for j, f in enumerate(functions):
         rsr=real_space_residual_all_iterations(mode=f, skip=skip)
         try:
-            all_rsr=column_stack((all_rsr, rsr))
+            all_rsr=np.column_stack((all_rsr, rsr))
         except:
             all_rsr=rsr
         print np.shape(all_rsr)
@@ -662,3 +687,76 @@ def plot_rsr(keys, mode, sort=False):
             rsr.sort()
         plt.plot(rsr, label=labels[i], lw=1.5, color=cmap(clr_index[i]))
     plt.legend(loc='upper left')
+
+    
+def radial_sort(img_file, shift=True):
+    img_array=np.absolute(spimage.sp_image_read(img_file,0).image)
+    if shift:
+        img_array=np.fft.fftshift(img_array)
+    #r=stuff.r_array_3D(np.shape(img_array)[0], ndimage.measurements.center_of_mass(img_array))
+    r=stuff.r_array_3D(np.shape(img_array)[0])
+    r_flat=r.flatten()
+    img_flat=img_array.flatten()
+    sort_order=np.argsort(r_flat)
+    return r_flat[sort_order], img_flat[sort_order]
+
+def image_to_list(file_name, cutoff=0.):
+    img=np.absolute(spimage.sp_image_read(file_name,0).image).flatten()
+    return img[np.where(img>np.max(img)*cutoff)]
+
+def round_by_prec(x, prec):
+    return np.round(x*prec)/prec
+
+def average_by_diff(r):
+    diff=r[1:]-r[:-1]
+    a=np.argwhere(diff>0.1).max()
+    new_rounded_r=round_by_prec(r[:a], 5)
+    r[:a]=new_rounded_r
+    return r
+
+def average_where_r(radi, i):
+    new_i_avg=[]
+    new_i_std=[]
+    for r in np.unique(radi):
+        new_i_avg.append(np.average(i[np.where(radi==r)]))
+        new_i_std.append(np.std(i[np.where(radi==r)]))
+    return np.unique(radi), new_i_avg, new_i_std
+
+def dot_strength(img_file, cutoff_r, c=2.5, mode='median', strongest=None, plot=False, plot_lines=False, fig_name=None, return_sorted_voxels=False):
+    if mode=='median': f=np.median
+    elif mode=='average': f=np.average
+    r,voxels=radial_sort(img_file, cutoff_r)
+    if strongest==None:
+        dot_border=f(voxels[np.where(r<cutoff_r)])+c*np.std(voxels[np.where(r<cutoff_r)])
+        dot=voxels[np.where((voxels>dot_border)&(r<cutoff_r*0.8))]
+    else:
+        strongest_voxels=voxels[r<cutoff_r*0.8]
+        strongest_voxels.sort()
+        dot=strongest_voxels[-strongest:]
+        #dot=voxels[:strongest]
+        dot_border=dot.min()
+        voxels_no_dot=voxels[((voxels<dot.min())&(r<cutoff_r))]
+    print dot, f(voxels_no_dot)
+    print 'dot contains %s voxels'%str(len(dot))
+    dot_strength=f(dot)/f(voxels_no_dot)
+    print 'The dot is %s times stronger than the %s'%(str(dot_strength),mode)
+    if return_sorted_voxels:
+        return r, voxels
+    if plot:
+        if fig_name==None:
+            plt.figure(img_file)
+        else:
+            plt.figure(fig_name)
+        new_r=r[r<cutoff_r]
+        new_r=new_r.round(1)
+        new_r=average_by_diff(new_r)
+        ravg, iavg, istd = average_where_r(new_r.round(1),voxels[r<cutoff_r])
+        plt.errorbar(ravg, iavg, yerr=istd, fmt='o')
+        if plot_lines:
+            plt.axhline(f(voxels_no_dot), c='k')
+            plt.axhline(dot_border, c='r')
+            plt.axvline(cutoff_r*0.8, c='r')
+        
+
+        
+        

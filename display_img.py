@@ -124,33 +124,34 @@ def show_x_y_z_slice(input_file, shift=True, mode='absolute', added_slice=False,
         vmax=None
         vmin=None
     c=np.shape(im.image)[0]/2
+    z=int((c*2-np.count_nonzero(im.image[c, c, :]))/2.2)
     
     if one_slice:
         fig=plt.figure(prefix, figsize=(10,10))
         if added_slice:
-            plt.imshow(f(np.sum(im.image, axis=0)), vmax=vmax, vmin=vmin, norm=n, cmap=cm)
+            plt.imshow(f(np.sum(im.image, axis=0))[z:-z,z:-z], vmax=vmax, vmin=vmin, norm=n, cmap=cm)
         else:
-            plt.imshow(f(im.image[c,:,:]), vmax=vmax, vmin=vmin, norm=n, cmap=cm)
+            plt.imshow(f(im.image[c,z:-z,z:-z]), vmax=vmax, vmin=vmin, norm=n, cmap=cm)
     else:    
         fig=plt.figure(prefix, figsize=(30,10))
         fig.add_subplot(1,3,1)
         plt.title('X slice')
         if added_slice:
-            plt.imshow(f(np.sum(im.image, axis=0)), vmax=vmax, vmin=vmin, norm=n, cmap=cm)
+            plt.imshow(f(np.sum(im.image, axis=0))[z:-z,z:-z], vmax=vmax, vmin=vmin, norm=n, cmap=cm)
         else:
-            plt.imshow(f(im.image[c,:,:]),vmax=vmax, vmin=vmin, norm=n, cmap=cm)
+            plt.imshow(f(im.image[c,z:-z,z:-z]),vmax=vmax, vmin=vmin, norm=n, cmap=cm)
         fig.add_subplot(1,3,2)
         plt.title('Y slice')
         if added_slice:
-            plt.imshow(f(np.sum(im.image, axis=1)), vmax=vmax, vmin=vmin, norm=n, cmap=cm)
+            plt.imshow(f(np.sum(im.image, axis=1))[z:-z,z:-z], vmax=vmax, vmin=vmin, norm=n, cmap=cm)
         else:
-            plt.imshow(f(im.image[:,c,:]), vmax=vmax, vmin=vmin, norm=n, cmap=cm)
+            plt.imshow(f(im.image[z:-z,c,z:-z]), vmax=vmax, vmin=vmin, norm=n, cmap=cm)
         fig.add_subplot(1,3,3)
         plt.title('Z slice')
         if added_slice:
-            plt.imshow(f(np.sum(im.image, axis=2)), vmax=vmax, vmin=vmin, norm=n, cmap=cm)
+            plt.imshow(f(np.sum(im.image, axis=2))[z:-z,z:-z], vmax=vmax, vmin=vmin, norm=n, cmap=cm)
         else:
-            plt.imshow(f(im.image[:,:,c]), vmax=vmax, vmin=vmin, norm=n, cmap=cm)
+            plt.imshow(f(im.image[z:-z,z:-z,c]), vmax=vmax, vmin=vmin, norm=n, cmap=cm)
     if save_file:
         plt.savefig(prefix)
 
